@@ -1,0 +1,7 @@
+#!/usr/bin/env bb
+(require '[babashka.classpath :as cp]
+         '[clojure.java.io :as io])
+(let [root (-> *file* io/file .getCanonicalFile .getParentFile .getParentFile)]
+  (cp/add-classpath (str (io/file root "src")))
+  (require 'hl.core)
+  (System/exit ((resolve 'hl.core/run) *command-line-args*)))

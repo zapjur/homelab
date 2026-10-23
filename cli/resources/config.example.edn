@@ -1,0 +1,7 @@
+;; Illustrative placeholders only. Store your configuration outside the repository.
+{:hosts
+ {:default
+  {:ssh-host "my-server"
+   :mac "AA:BB:CC:DD:EE:FF"
+   :broadcast "192.168.1.255"
+   :wol-port 9}}}
