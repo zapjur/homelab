@@ -4,4 +4,5 @@
   {:ssh-host "my-server"
    :mac "AA:BB:CC:DD:EE:FF"
    :broadcast "192.168.1.255"
-   :wol-port 9}}}
+   :wol-port 9
+   :boot-timeout-seconds 300}}}

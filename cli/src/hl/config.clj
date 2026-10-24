@@ -3,6 +3,8 @@
             [clojure.java.io :as io]
             [clojure.string :as str]))
 
+(def default-boot-timeout-seconds 300)
+
 (defn config-path []
   (str (io/file (System/getProperty "user.home") ".config" "hl" "config.edn")))
 
@@ -30,8 +32,10 @@
             "an SSH alias or destination starting with a letter or digit"]
            [:mac valid-mac? "six hexadecimal octets separated by colons or hyphens"]
            [:broadcast valid-broadcast? "an IPv4 broadcast destination"]
-           [:wol-port #(and (integer? %) (<= 1 % 65535)) "an integer from 1 to 65535"]]]
-    (when-not (valid? (get host field))
+           [:wol-port #(and (integer? %) (<= 1 % 65535)) "an integer from 1 to 65535"]
+           [:boot-timeout-seconds #(and (integer? %) (pos? %)) "a positive integer number of seconds"]]]
+    (when-not (valid? (get host field (when (= field :boot-timeout-seconds)
+                                      default-boot-timeout-seconds)))
       (throw (ex-info (str "Invalid or missing " field "; expected " description ".") {:field field}))))
   host)
 
@@ -43,7 +47,9 @@
             (into {} (map (fn [[name host]]
                             (when-not (map? host)
                               (throw (ex-info (str "Expected a host map for " name ".") {})))
-                            [name (validate-host (merge {:wol-port 9} host))]) hosts)))))
+                            [name (validate-host (merge {:wol-port 9
+                                                        :boot-timeout-seconds default-boot-timeout-seconds}
+                                                       host))]) hosts)))))
 
 (defn load-config
   ([] (load-config (config-path)))

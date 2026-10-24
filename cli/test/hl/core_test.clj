@@ -17,17 +17,31 @@
       (is (= 0 (:exit (invoke args))))
       (is (re-find #"Usage: hl" (:out (invoke args)))))
     (is (= (str core/version "\n") (:out (invoke ["--version"]))))
-    (doseq [args [["unknown"] ["ssh" "extra"] ["--help" "extra"]]]
+    (doseq [args [["unknown"] ["ssh" "extra"] ["--help" "extra"]
+                 ["on" "--unknown"] ["status" "--no-wait"]
+                 ["on" "--no-wait" "extra"]]]
       (is (= 2 (:exit (invoke args))))) ))
 
 (deftest dispatch
   (with-redefs [config/default-host (constantly host)
                 power/on! (fn [h] (is (= host h)) 0)
+                ssh/wait-until-available! (fn [h] (is (= host h)) 0)
                 ssh/execute! (fn [operation h]
                                (is (= host h))
                                ({:ssh 23 :off 42 :status 255} operation))]
     (doseq [[command exit] [["on" 0] ["ssh" 23] ["off" 42] ["status" 255]]]
       (is (= exit (:exit (invoke [command])))))))
+
+(deftest wake-wait-options
+  (let [events (atom [])]
+    (with-redefs [config/default-host (constantly host)
+                  power/on! (fn [h] (swap! events conj [:send h]) 0)
+                  ssh/wait-until-available! (fn [h] (swap! events conj [:wait h]) 1)]
+      (is (= 1 (:exit (invoke ["on"]))))
+      (is (= [[:send host] [:wait host]] @events))
+      (reset! events [])
+      (is (= 0 (:exit (invoke ["on" "--no-wait"]))))
+      (is (= [[:send host]] @events)))))
 
 (deftest errors
   (doseq [command ["on" "off" "ssh" "status"]]
