@@ -1,0 +1,8 @@
+---
+all:
+  children:
+    homelab:
+      hosts:
+        server:
+          ansible_host: my-server
+          ansible_connection: ssh
