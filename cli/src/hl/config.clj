@@ -27,6 +27,10 @@
 (defn validate-host [host]
   (when-not (map? host)
     (throw (ex-info "Expected a host map at [:hosts :default]." {})))
+  (when (contains? host :tailscale-ssh-host)
+    (when-not (and (string? (:tailscale-ssh-host host))
+                   (re-matches #"[a-zA-Z0-9][a-zA-Z0-9._@:-]*" (:tailscale-ssh-host host)))
+      (throw (ex-info "Invalid :tailscale-ssh-host; expected a safe SSH alias or destination." {:field :tailscale-ssh-host}))))
   (doseq [[field valid? description]
           [[:ssh-host #(and (string? %) (re-matches #"[a-zA-Z0-9][a-zA-Z0-9._@:-]*" %))
             "an SSH alias or destination starting with a letter or digit"]

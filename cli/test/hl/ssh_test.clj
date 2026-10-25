@@ -125,3 +125,22 @@
           (do (is (= budget-ms @clock))
               (is (re-find #"Timed out.*power state is unknown" (str errors)))
               (is (re-find #"Connection refused" (str errors)))))))))
+
+(deftest select-transport
+  (is (= host (ssh/selected-host host false)))
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Missing :tailscale-ssh-host"
+                        (ssh/selected-host host true)))
+  (let [with-tail (assoc host :tailscale-ssh-host "example-tailnet")]
+    (is (= "example-tailnet" (:ssh-host (ssh/selected-host with-tail true))))
+    (doseq [operation [:ssh :off]]
+      (with-redefs [ssh/run-process! (fn [args interactive?]
+                                      (is (= (ssh/arguments operation "example-tailnet") args))
+                                      (is interactive?)
+                                      0)]
+        (is (= 0 (ssh/execute! operation with-tail true)))))
+    (with-redefs [ssh/endpoint! (fn [h]
+                                 (is (= "example-tailnet" (:ssh-host h)))
+                                 endpoint)
+                  ssh/tcp-probe! (fn [_ _] {:available? true})]
+      (is (= 0 (binding [*out* (java.io.StringWriter.)]
+                 (ssh/execute! :status with-tail true)))))))
