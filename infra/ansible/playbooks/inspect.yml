@@ -1,0 +1,112 @@
+---
+- name: Inspect homelab systems without changing configuration
+  hosts: homelab
+  gather_facts: true
+  become: false
+  vars:
+    inspect_lvm: true
+    inspect_lvm_config: 'devices { hints="none" use_devicesfile=0 } log { file="" syslog=0 }'
+
+  tasks:
+    - name: Show system information
+      ansible.builtin.debug:
+        msg:
+          hostname: "{{ ansible_facts.hostname }}"
+          operating_system: "{{ ansible_facts.distribution }} {{ ansible_facts.distribution_version }}"
+          kernel: "{{ ansible_facts.kernel }}"
+          architecture: "{{ ansible_facts.architecture }}"
+          cpu_models: "{{ ansible_facts.processor | default([]) | reject('match', '^[0-9]+$') | unique | list }}"
+          logical_processors: "{{ ansible_facts.processor_vcpus | default('unavailable') }}"
+          ram_mib: "{{ ansible_facts.memtotal_mb }}"
+          uptime_seconds: "{{ ansible_facts.uptime_seconds | default('unavailable') }}"
+          default_ipv4: "{{ ansible_facts.default_ipv4 | default({}) }}"
+          selinux: "{{ ansible_facts.selinux | default({'status': 'unavailable'}) }}"
+
+    - name: Gather service status without managing services
+      ansible.builtin.service_facts:
+
+    - name: Show security and monitoring services
+      ansible.builtin.debug:
+        msg:
+          service: "{{ item }}"
+          details: "{{ ansible_facts.services[item] | default({'status': 'not installed or not reported'}) }}"
+      loop:
+        - firewalld.service
+        - sshd.service
+        - smartd.service
+
+    # Only an absent executable is tolerated. Permission and other runtime errors fail.
+    # check_mode: false executes these explicitly read-only queries in check mode too.
+    - name: Inspect failed units, storage, and networking
+      ansible.builtin.command:
+        argv: "{{ item.argv }}"
+      loop:
+        - label: Failed systemd units
+          argv: [systemctl, --failed, --no-pager, --no-legend, --plain]
+        - label: Filesystems and mount points
+          argv: [findmnt, --list, --output, 'TARGET,SOURCE,FSTYPE,OPTIONS']
+        - label: Disk space usage
+          argv: [df, --human-readable, --print-type]
+        - label: Block devices
+          argv: [lsblk, --output, 'NAME,TYPE,SIZE,FSTYPE,MOUNTPOINTS']
+        - label: Network interfaces
+          argv: [ip, -brief, link, show]
+        - label: IPv4 addresses
+          argv: [ip, -brief, -4, address, show]
+        - label: IPv4 default route
+          argv: [ip, -4, route, show, default]
+        - label: Active NetworkManager connections
+          argv: [nmcli, --terse, --fields, 'NAME,UUID,TYPE,DEVICE', connection, show, --active]
+      loop_control:
+        label: "{{ item.label }}"
+      register: inspection
+      changed_when: false
+      failed_when: >-
+        inspection.rc != 0 and not
+        (inspection.rc == 2 and
+         'No such file or directory' in (inspection.msg | default('')))
+      check_mode: false
+
+    - name: Show failed units, storage, and networking
+      ansible.builtin.debug:
+        msg:
+          inspection: "{{ item.item.label }}"
+          output: "{{ item.stdout_lines | default([]) }}"
+          note: "{{ item.msg | default('') }}"
+          warnings: "{{ item.stderr_lines | default([]) }}"
+      loop: "{{ inspection.results }}"
+      loop_control:
+        label: "{{ item.item.label }}"
+
+    # Disable hints entirely: --nohints alone can still invalidate the hints file.
+    # These are process-local overrides; no LVM configuration file is changed.
+    - name: Inspect LVM metadata without locks or hints updates
+      become: true
+      ansible.builtin.command:
+        argv: "{{ [item, '--readonly', '--config', inspect_lvm_config] }}"
+      loop:
+        - pvs
+        - vgs
+        - lvs
+      loop_control:
+        label: "{{ item }}"
+      register: lvm_inspection
+      changed_when: false
+      failed_when: >-
+        lvm_inspection.rc != 0 and not
+        (lvm_inspection.rc == 2 and
+         'No such file or directory' in (lvm_inspection.msg | default('')))
+      check_mode: false
+      when: inspect_lvm | bool
+
+    - name: Show LVM information
+      ansible.builtin.debug:
+        msg:
+          inspection: "{{ item.item }}"
+          output: "{{ item.stdout_lines | default([]) }}"
+          note: "{{ item.msg | default('') }}"
+          warnings: "{{ item.stderr_lines | default([]) }}"
+      loop: "{{ lvm_inspection.results | default([]) }}"
+      loop_control:
+        label: "{{ item.item }}"
+      when: inspect_lvm | bool
