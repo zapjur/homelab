@@ -92,7 +92,18 @@
               (do (pause! (max 0 (min 2000 (- deadline (monotonic-ms)))))
                   (recur error)))))))))
 
-(defn execute! [operation host]
+(defn selected-host [host tailscale?]
+  (if tailscale?
+    (let [alias (:tailscale-ssh-host host)]
+      (when-not (and (string? alias) (not (str/blank? alias)))
+        (throw (ex-info "Missing :tailscale-ssh-host in ~/.config/hl/config.edn." {})))
+      (assoc host :ssh-host alias))
+    host))
+
+(defn execute!
+  ([operation host] (execute! operation host false))
+  ([operation host tailscale?]
+   (let [host (selected-host host tailscale?)]
   (if (= :status operation)
     (let [endpoint (endpoint! host)
           {:keys [available? error]} (tcp-probe! endpoint 5000)]
@@ -102,4 +113,4 @@
                  "SSH TCP port is unreachable; power state is unknown."))
       (when error (binding [*out* *err*] (println error)))
       (if available? 0 1))
-    (run-process! (arguments operation (:ssh-host host)) true)))
+    (run-process! (arguments operation (:ssh-host host)) true)))))

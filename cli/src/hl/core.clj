@@ -14,6 +14,7 @@ Commands:
   off         Request graceful shutdown over SSH with interactive sudo
   ssh         Open an interactive OpenSSH session
   status      Check the SSH TCP port without authenticating (not power state)
+  --tailscale Use the optional Tailscale SSH alias with ssh/off/status
   help        Show this help (--help is equivalent)
   --version   Print the CLI version
 
@@ -21,25 +22,36 @@ Boot wait: :boot-timeout-seconds in host configuration (default: " config/defaul
 Configuration: ~/.config/hl/config.edn
 SSH authentication and keys are managed by OpenSSH and ~/.ssh/config."))
 
+(defn valid-arguments? [args]
+  (contains? #{[] ["help"] ["--help"] ["--version"]
+               ["on"] ["on" "--no-wait"]
+               ["ssh"] ["ssh" "--tailscale"]
+               ["off"] ["off" "--tailscale"]
+               ["status"] ["status" "--tailscale"]}
+             (vec args)))
+
 (defn run [args]
   (try
     (cond
       (empty? args) (do (println usage) 0)
-      (and (not= 1 (count args)) (not= ["on" "--no-wait"] (vec args)))
-      (do (binding [*out* *err*] (println "Invalid arguments.\n" usage)) 2)
+      (not (valid-arguments? args))
+      (do (binding [*out* *err*]
+            (println "Invalid or unknown arguments:" (pr-str (vec args)))
+            (println usage))
+          2)
       :else
-      (case (first args)
-        ("help" "--help") (do (println usage) 0)
-        "--version" (do (println version) 0)
-        "on" (let [host (config/default-host)]
-               (power/on! host)
-               (if (= "--no-wait" (second args))
-                 0
-                 (ssh/wait-until-available! host)))
-        "off" (ssh/execute! :off (config/default-host))
-        "ssh" (ssh/execute! :ssh (config/default-host))
-        "status" (ssh/execute! :status (config/default-host))
-        (do (binding [*out* *err*] (println "Unknown command:" (first args)) (println usage)) 2)))
+      (let [tailscale? (= "--tailscale" (second args))]
+        (case (first args)
+          ("help" "--help") (do (println usage) 0)
+          "--version" (do (println version) 0)
+          "on" (let [host (config/default-host)]
+                 (power/on! host)
+                 (if (= "--no-wait" (second args))
+                   0
+                   (ssh/wait-until-available! host)))
+          "off" (ssh/execute! :off (config/default-host) tailscale?)
+          "ssh" (ssh/execute! :ssh (config/default-host) tailscale?)
+          "status" (ssh/execute! :status (config/default-host) tailscale?))))
     (catch java.io.IOException e
       (binding [*out* *err*] (println "hl:" (.getMessage e)))
       1)

@@ -40,3 +40,10 @@
       (finally (.delete file)))
     (is (thrown-with-msg? clojure.lang.ExceptionInfo #"not found"
                           (config/load-config (str file))))))
+
+(deftest optional-tailscale-config
+  (is (= "tailnet-server" (:tailscale-ssh-host (config/validate-host
+                                             (assoc host :tailscale-ssh-host "tailnet-server")))))
+  (doseq [invalid [nil "" "-bad" "bad name" "bad;name" 42]]
+    (is (thrown? clojure.lang.ExceptionInfo
+                 (config/validate-host (assoc host :tailscale-ssh-host invalid))))))

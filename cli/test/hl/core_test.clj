@@ -19,15 +19,17 @@
     (is (= (str core/version "\n") (:out (invoke ["--version"]))))
     (doseq [args [["unknown"] ["ssh" "extra"] ["--help" "extra"]
                  ["on" "--unknown"] ["status" "--no-wait"]
-                 ["on" "--no-wait" "extra"]]]
+                 ["on" "--no-wait" "extra"] ["on" "--tailscale"]
+                 ["ssh" "--no-wait"] ["off" "--tailscale" "extra"]]]
       (is (= 2 (:exit (invoke args))))) ))
 
 (deftest dispatch
   (with-redefs [config/default-host (constantly host)
                 power/on! (fn [h] (is (= host h)) 0)
                 ssh/wait-until-available! (fn [h] (is (= host h)) 0)
-                ssh/execute! (fn [operation h]
+                ssh/execute! (fn [operation h tailscale?]
                                (is (= host h))
+                               (is (false? tailscale?))
                                ({:ssh 23 :off 42 :status 255} operation))]
     (doseq [[command exit] [["on" 0] ["ssh" 23] ["off" 42] ["status" 255]]]
       (is (= exit (:exit (invoke [command])))))))
@@ -53,3 +55,12 @@
                 ssh/run-process! (fn [& _] (throw (java.io.IOException. "Cannot execute ssh")))]
     (is (= 1 (:exit (invoke ["on"]))))
     (is (= 1 (:exit (invoke ["ssh"]))))))
+
+(deftest tailscale-dispatch
+  (with-redefs [config/default-host (constantly host)
+                ssh/execute! (fn [operation h tailscale?]
+                               (is (= host h))
+                               (is (true? tailscale?))
+                               ({:ssh 23 :off 42 :status 255} operation))]
+    (doseq [[command exit] [["ssh" 23] ["off" 42] ["status" 255]]]
+      (is (= exit (:exit (invoke [command "--tailscale"])))))))

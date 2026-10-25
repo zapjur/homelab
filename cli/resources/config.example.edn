@@ -1,7 +1,9 @@
 ;; Illustrative placeholders only. Store your configuration outside the repository.
 {:hosts
  {:default
-  {:ssh-host "my-server"
+  {:ssh-host "my-server-lan"
+   ;; Optional; required only for ssh/off/status --tailscale.
+   :tailscale-ssh-host "my-server-tailnet"
    :mac "AA:BB:CC:DD:EE:FF"
    :broadcast "192.168.1.255"
    :wol-port 9

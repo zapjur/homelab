@@ -170,3 +170,16 @@ Your OpenSSH configuration remains trusted: `ssh -G` can evaluate local
 Host key checking is never disabled. Wake-on-LAN is unauthenticated UDP, so use
 it only on networks you trust. `hl off` immediately requests shutdown; invoke it
 only when you intend to power off the configured server.
+
+## LAN and Tailscale SSH transports
+
+The default `:ssh-host` alias is used for `hl ssh`, `hl off`, and `hl status`.
+Optionally configure `:tailscale-ssh-host` in `~/.config/hl/config.edn` to
+use `hl ssh --tailscale`, `hl off --tailscale`, and `hl status --tailscale`.
+Both fields are **OpenSSH aliases** defined in `~/.ssh/config`. The Tailscale
+option is rejected for `hl on`: `hl on` and `hl on --no-wait` still send a
+local LAN Wake-on-LAN packet, and default waiting still probes the LAN SSH port.
+
+Example local aliases: `homelab-lan` for the local IPv4 address, and
+`homelab-tailnet` for the Tailscale MagicDNS name. Neither example is
+required; choose your own aliases.
